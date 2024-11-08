@@ -1,8 +1,15 @@
 // src/controllers/user.controller.ts
 import { Request, Response, RequestHandler } from 'express';
 import User from '../model/user.model';
+import jwt from 'jsonwebtoken';
+const secretKey = process.env.JWT_SECRET || 'your-default-secret';
 
-// Helper function to send error response
+const generateToken = (userId: string): string => {
+    const payload = { userId }; 
+    const options = { expiresIn: '1h' };
+    return jwt.sign(payload, secretKey, options);
+};
+
 const sendErrorResponse = (res: Response, statusCode: number, message: string): void => {
     res.status(statusCode).json({ status: "error", message });
 };
@@ -61,13 +68,15 @@ export const login: RequestHandler = async (req: Request, res: Response): Promis
             return;
         }
 
-        // Send success response without token
+        const token = generateToken(user._id.toString());
+
         res.status(200).json({
             status: "success",
             message: "Login successful",
             data: {
                 id: user._id,
-                username: user.username
+                username: user.username,
+                token: token 
             }
         });
     } catch (error) {

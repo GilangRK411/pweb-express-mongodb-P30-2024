@@ -1,34 +1,37 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 
-const JWT_SECRET = '@#I)_!#)_#!#!#L:MlmolnopJO!@P:"<:2p1i3012i-034i1!!!#DD';
+const secretKey = process.env.JWT_SECRET || 'your-default-secret';
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: { userId: string }; // Adjust this according to the structure of your token
+export const authenticateToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const authHeader = req.headers['authorization'];
+    
+
+    if (!authHeader) {
+        res.status(401).json({ message: 'Access denied. No token provided.' });
+        return;
     }
-  }
-}
-
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
-  // Extract the token from the Authorization header
-  const token = req.headers.authorization?.split(" ")[1];
-  
-  // If no token is found, respond with a 401 Unauthorized status
-  if (!token) {
-    return res.status(401).json({ message: 'Authorization token is required.' });
-  }
-
-  // Verify the token using the secret key
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    // If token is invalid, respond with a 403 Forbidden status
-    if (err) {
-      return res.status(403).json({ message: 'Invalid or expired token.' });
+    const token = authHeader.split(' ')[1];
+    
+    if (!token) {
+        res.status(401).json({ message: 'Access denied. No token provided.' });
+        return;
     }
 
-    // Store the decoded user information in the request object for later use
-    req.user = { userId: (decoded as jwt.JwtPayload).userId }; // Cast decoded to JwtPayload to access userId
-    next(); // Proceed to the next middleware or route handler
-  });
+    try {
+        const decoded = jwt.verify(token, secretKey) as { userId: string };
+
+        const user = await mongoose.connection.db.collection('users').findOne({ _id: new mongoose.Types.ObjectId(decoded.userId) });
+
+        if (!user) {
+            res.status(403).json({ message: 'Invalid token: user not found.' });
+            return;
+        }
+
+        next();
+    } catch (err) {
+        console.error("Token verification failed:", err);
+        res.status(403).json({ message: 'Invalid or expired token.' });
+    }
 };
